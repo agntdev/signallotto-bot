@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Display current lottery ticket balance"
+              "text": "SignalLottery isn't set up yet. Ask the owner to connect secure storage."
             }
           }
         ],

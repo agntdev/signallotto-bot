@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "List scheduled lottery events"
+              "text": "SignalLottery isn't set up yet. Ask the owner to connect secure storage."
             }
           }
         ],

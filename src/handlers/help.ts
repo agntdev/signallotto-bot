@@ -9,8 +9,8 @@ import { inlineButton, inlineKeyboard } from "../toolkit/index.js";
 const composer = new Composer<Ctx>();
 
 const HELP =
-  "ℹ️ Tap /start to open the menu, then pick what you want from the buttons.\n\n" +
-  "Everything in this bot is reachable by tapping — you don't need to remember any commands.";
+  "SignalLottery turns verified nearby radio signals into draw entries.\n\n" +
+  "Start with /start, enable credits if you want them, then use the buttons to check entries and draws. Owners can manage signals and payouts from Owner controls.";
 
 const backToMenu = inlineKeyboard([[inlineButton("⬅️ Back to menu", "menu:main")]]);
 

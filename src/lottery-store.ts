@@ -1,4 +1,5 @@
 /** Durable SignalLottery records. Every collection is reached through an explicit index. */
+import { SecureStorageError, secureStore } from "./secure-storage.js";
 export type Wallet = { address: string; verified: boolean; linkedAt: string; verifiedAt?: string };
 export type User = { telegramId: number; locationOptIn: boolean; creditsPaused: boolean; lastActive: string; wallet?: Wallet; kycVerified?: boolean };
 export type Signal = { id: string; name: string; frequency: string; geoRadius: number; timeWindowMinutes: number };
@@ -13,7 +14,15 @@ export class StoreUnavailable extends Error {}
 interface Redis { get(key: string): Promise<string | null>; set(key: string, value: string, ...args: string[]): Promise<unknown>; }
 let clientPromise: Promise<Redis> | undefined;
 async function redis(): Promise<Redis> {
-  const url = typeof process === "undefined" ? undefined : process.env.REDIS_URL;
+  let url: string | undefined;
+  try {
+    // Database credentials are centralized in the configured secret manager.
+    // The migration in secure-storage.ts is the sole legacy-environment reader.
+    url = await (await secureStore()).get("database/redis-url");
+  } catch (error) {
+    if (error instanceof SecureStorageError) throw new StoreUnavailable();
+    throw error;
+  }
   if (!url) throw new StoreUnavailable();
   clientPromise ??= (async () => {
     const { createRequire } = await import("node:module");

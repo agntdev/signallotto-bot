@@ -20,7 +20,7 @@ composer.command("start", async (ctx) => {
       reply_markup: user.locationOptIn ? mainMenuKeyboard() : inlineKeyboard([[inlineButton("Enable signal credits", "privacy:opt-in")], [inlineButton("Open menu", "menu:main")]]),
     });
   } catch (error) {
-    if (error instanceof StoreUnavailable) await ctx.reply("SignalLottery isn't set up yet. Ask the owner to connect secure storage.");
+    if (error instanceof StoreUnavailable) await ctx.reply("SignalLottery's secure storage isn't set up yet. Ask the owner to finish provider setup.");
     else throw error;
   }
 });
@@ -28,7 +28,7 @@ composer.command("start", async (ctx) => {
 composer.callbackQuery("privacy:opt-in", async (ctx) => {
   await ctx.answerCallbackQuery();
   try { await setOptIn(ctx.from.id, true); await ctx.editMessageText("Signal credits are on. We only keep verified detections for dispute checks.", { reply_markup: mainMenuKeyboard() }); }
-  catch (error) { if (error instanceof StoreUnavailable) await ctx.reply("SignalLottery isn't set up yet. Ask the owner to connect secure storage."); else throw error; }
+  catch (error) { if (error instanceof StoreUnavailable) await ctx.reply("SignalLottery's secure storage isn't set up yet. Ask the owner to finish provider setup."); else throw error; }
 });
 
 // "Back to menu" — re-render the main menu in place from any sub-view.

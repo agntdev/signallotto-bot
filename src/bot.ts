@@ -6,7 +6,7 @@ import type { StorageAdapter } from "grammy";
 // bot grows. Durable domain data must NOT live here — use the toolkit's
 // persistent storage (see AGENTS.md).
 export interface Session {
-  step?: "add-signal" | "schedule-draw" | "payout" | "link-device";
+  step?: "add-signal" | "schedule-draw" | "payout" | "link-device" | "link-wallet" | "payout-settings" | "verify-wallet" | "kyc";
   draft?: { drawId?: string; payoutId?: string };
 }
 

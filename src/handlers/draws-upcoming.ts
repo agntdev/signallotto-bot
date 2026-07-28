@@ -10,7 +10,7 @@ import { upcomingDraws, StoreUnavailable } from "../lottery-store.js";
 // Do NOT rewrite src/bot.ts — buildBot() already auto-loads this module.
 // Menu: wire this into /start via registerMainMenuItem({ label: "Upcoming Draws", data: "draws:upcoming" }) if the toolkit exposes it.
 
-registerMainMenuItem({ label: "Upcoming draws", data: "draws:upcoming", order: 40 });
+registerMainMenuItem({ label: "View draws", data: "draws:upcoming", order: 40 });
 const composer = new Composer<Ctx>();
 
 composer.callbackQuery("draws:upcoming", async (ctx) => {

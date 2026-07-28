@@ -1,7 +1,7 @@
 import { Composer } from "grammy";
 import type { Ctx } from "../bot.js";
 import { inlineButton, inlineKeyboard, registerMainMenuItem } from "../toolkit/index.js";
-import { ticketsFor, StoreUnavailable, touchUser } from "../lottery-store.js";
+import { activeTicketCount, StoreUnavailable, touchUser } from "../lottery-store.js";
 
 // SCAFFOLD — generated from the bot blueprint BEFORE the agent runs.
 // Keep a LIVE registration (.command / .callbackQuery / …) so this feature is
@@ -15,8 +15,8 @@ const composer = new Composer<Ctx>();
 
 composer.callbackQuery("balance:show", async (ctx) => {
   await ctx.answerCallbackQuery();
-  try { const user = await touchUser(ctx.from.id); const tickets = await ticketsFor(ctx.from.id);
-    await ctx.editMessageText(user.locationOptIn ? `You have ${tickets.length} active ${tickets.length === 1 ? "entry" : "entries"}.` : "Signal credits are off. Enable them to start earning entries.", { reply_markup: inlineKeyboard([[inlineButton(user.locationOptIn ? "Pause credits" : "Enable credits", user.locationOptIn ? "pause:start" : "privacy:opt-in")], [inlineButton("Back to menu", "menu:main")]]) });
+  try { const user = await touchUser(ctx.from.id); const count = await activeTicketCount(ctx.from.id);
+    await ctx.editMessageText(user.locationOptIn ? `You have ${count} active ${count === 1 ? "entry" : "entries"} in the current draw.` : "Signal credits are off. Enable them to start earning entries.", { reply_markup: inlineKeyboard([[inlineButton(user.locationOptIn ? "Pause credits" : "Enable credits", user.locationOptIn ? "pause:start" : "privacy:opt-in")], [inlineButton("Back to menu", "menu:main")]]) });
   } catch (error) { if (error instanceof StoreUnavailable) await ctx.reply("SignalLottery isn't set up yet. Ask the owner to connect secure storage."); else throw error; }
 });
 

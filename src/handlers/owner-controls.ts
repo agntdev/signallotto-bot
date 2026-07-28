@@ -1,39 +1,57 @@
 import { Composer } from "grammy";
 import type { Ctx } from "../bot.js";
 import { inlineButton, inlineKeyboard, registerMainMenuItem } from "../toolkit/index.js";
-import { addSignal, createDraw, drawsForOwner, markPaid, now, runDraw, StoreUnavailable } from "../lottery-store.js";
+import { addSignal, claimOperator, completePayout, createDraw, drawsForOwner, now, recordPayout, runDraw, StoreUnavailable } from "../lottery-store.js";
 
 registerMainMenuItem({ label: "Owner controls", data: "owner:menu", order: 50 });
 const composer = new Composer<Ctx>();
-const ownerMenu = inlineKeyboard([[inlineButton("Add signal", "owner:signal")], [inlineButton("Schedule draw", "owner:draw")], [inlineButton("Settle payout", "owner:payout")], [inlineButton("Back to menu", "menu:main")]]);
+const ownerMenu = inlineKeyboard([[inlineButton("Add signal", "owner:signal")], [inlineButton("Schedule draw", "owner:draw")], [inlineButton("Run due draws", "owner:due")], [inlineButton("Record payout", "owner:payout")], [inlineButton("Back to menu", "menu:main")]]);
 const unavailable = async (ctx: Ctx) => ctx.reply("SignalLottery isn't set up yet. Ask the owner to connect secure storage.");
+async function operator(ctx: Ctx): Promise<boolean> { if (!ctx.from) return false; const ok = await claimOperator(ctx.from.id); if (!ok) await ctx.reply("Owner controls are reserved for this bot's operator."); return ok; }
 
-composer.callbackQuery("owner:menu", async (ctx) => { await ctx.answerCallbackQuery(); await ctx.editMessageText("Owner controls are tied to the account that creates each draw.", { reply_markup: ownerMenu }); });
-composer.callbackQuery("owner:signal", async (ctx) => { await ctx.answerCallbackQuery(); ctx.session.step = "add-signal"; await ctx.reply("Send the frequency, radius in metres, and window in minutes.\nExample: 99.5 MHz, 250, 30"); });
-composer.callbackQuery("owner:draw", async (ctx) => { await ctx.answerCallbackQuery(); ctx.session.step = "schedule-draw"; await ctx.reply("Send the prize and UTC date-time.\nExample: 0.01 BTC | 2030-01-01T12:00:00Z"); });
-composer.callbackQuery("owner:payout", async (ctx) => {
+composer.callbackQuery("owner:menu", async (ctx) => { await ctx.answerCallbackQuery(); try { if (await operator(ctx)) await ctx.editMessageText("Run draws, tune monitored signals, and record crypto payouts here.", { reply_markup: ownerMenu }); } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; } });
+composer.callbackQuery("owner:signal", async (ctx) => { await ctx.answerCallbackQuery(); try { if (!await operator(ctx)) return; ctx.session.step = "add-signal"; await ctx.reply("Send name, frequency, radius in metres, and window in minutes.\nExample: City FM, 99.5 MHz, 250, 30", { reply_markup: { force_reply: true, input_field_placeholder: "Signal details" } }); } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; } });
+composer.callbackQuery("owner:draw", async (ctx) => { await ctx.answerCallbackQuery(); try { if (!await operator(ctx)) return; ctx.session.step = "schedule-draw"; await ctx.reply("Send prize, UTC date-time, and winner count. Leave winner count blank for 3.\nExample: 0.01 BTC | 2030-01-01T12:00:00Z | 3", { reply_markup: { force_reply: true, input_field_placeholder: "Prize | UTC time | winners" } }); } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; } });
+composer.callbackQuery("owner:due", async (ctx) => {
   await ctx.answerCallbackQuery();
-  try { const draws = await drawsForOwner(ctx.from.id); const owned = draws.filter((d) => d.winnerId && d.payoutStatus === "pending");
-    if (!owned.length) return ctx.reply("No unpaid winning draws are ready to settle.");
-    await ctx.editMessageText("Choose the draw you paid.", { reply_markup: inlineKeyboard([...owned.map((d) => [inlineButton(`Mark ${d.prize} paid`, `owner:pay:${d.id}`)]), [inlineButton("Back", "owner:menu")]]) });
-  } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; }
-});
-composer.callbackQuery(/^owner:pay:(.+)$/, async (ctx) => { await ctx.answerCallbackQuery(); ctx.session.step = "payout"; ctx.session.draft = { drawId: ctx.match[1] }; await ctx.reply("Send the transaction reference to record this manual payout."); });
-composer.callbackQuery(/^owner:run:(.+)$/, async (ctx) => {
-  await ctx.answerCallbackQuery();
-  try { const result = await runDraw(ctx.match[1], ctx.from.id); const text = result.reason === "early" ? "That draw isn't due yet." : result.reason === "empty" ? "No valid entries landed in this draw, so no winner was selected." : result.winner ? `The draw is complete. The winner has been notified privately.` : "That draw isn't available to this account."; await ctx.reply(text); if (result.winner && result.draw) { try { await ctx.api.sendMessage(result.winner, `You won ${result.draw.prize}! The owner will arrange your manual crypto payout.`); } catch { /* A blocked recipient must not stop the draw. */ } } }
+  try { if (!await operator(ctx) || !ctx.from) return; const due = (await drawsForOwner(ctx.from.id)).filter((d) => !d.completedAt && new Date(d.scheduledTime).getTime() <= now().getTime()); if (!due.length) return ctx.reply("No draws are due right now."); for (const draw of due) await finishDraw(ctx, draw.id); }
   catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; }
 });
-composer.command("payout", async (ctx) => { await ctx.reply("Open Owner controls, then tap Settle payout to record a completed transfer.", { reply_markup: ownerMenu }); });
+composer.callbackQuery("owner:payout", async (ctx) => {
+  await ctx.answerCallbackQuery();
+  try { if (!await operator(ctx)) return; const draws = (await drawsForOwner(ctx.from.id)).filter((d) => d.winnerIds.length); if (!draws.length) return ctx.reply("No winning draws are ready for a payout record."); await ctx.editMessageText("Choose a completed draw to record the next payout.", { reply_markup: inlineKeyboard([...draws.slice(0, 6).map((d) => [inlineButton(`Record ${d.prize}`, `owner:pay:${d.id}`)]), [inlineButton("Back", "owner:menu")]]) }); }
+  catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; }
+});
+composer.callbackQuery(/^owner:pay:(.+)$/, async (ctx) => { await ctx.answerCallbackQuery(); try { if (!await operator(ctx)) return; ctx.session.step = "payout"; ctx.session.draft = { drawId: ctx.match[1] }; await ctx.reply("Send amount, currency, and an optional transaction hash.\nExample: 0.01 | BTC | txhash", { reply_markup: { force_reply: true, input_field_placeholder: "Amount | currency | transaction" } }); } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; } });
+composer.callbackQuery(/^owner:complete:(.+)$/, async (ctx) => { await ctx.answerCallbackQuery(); try { if (!await operator(ctx)) return; const payout = await completePayout(ctx.match[1], ctx.from.id); await ctx.editMessageText(payout ? "Payout marked complete. The record is safely kept in the winner's history." : "That payout can't be completed from this account.", { reply_markup: ownerMenu }); } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; } });
+composer.callbackQuery(/^owner:run:(.+)$/, async (ctx) => { await ctx.answerCallbackQuery(); try { if (await operator(ctx)) await finishDraw(ctx, ctx.match[1]); } catch (error) { if (error instanceof StoreUnavailable) await unavailable(ctx); else throw error; } });
+
+async function finishDraw(ctx: Ctx, drawId: string): Promise<void> {
+  if (!ctx.from) return;
+  const result = await runDraw(drawId, ctx.from.id);
+  if ("reason" in result) {
+    if (result.reason === "early") return void await ctx.reply("That draw closes Sunday at 23:59 UTC, so it isn't ready yet.");
+    if (result.reason === "empty") return void await ctx.reply("This draw closed with no valid entries, so no winner was selected.");
+    if (result.reason === "complete") return void await ctx.reply("That draw has already been completed.");
+    return void await ctx.reply("That draw isn't available to this account.");
+  }
+  await ctx.reply(`Draw complete — ${result.winners.length} ${result.winners.length === 1 ? "winner was" : "winners were"} selected and notified.`);
+  console.info("[signal-lottery] draw_completed", { winners: result.winners.length });
+  for (const winner of result.winners) for (let attempt = 0; attempt < 2; attempt++) { try { await ctx.api.sendMessage(winner.userId, `You won ${result.draw.prize}! Your winning entry is recorded. The operator will arrange your manual crypto payout next.`); console.info("[signal-lottery] notification_sent", { kind: "winner", attempt: attempt + 1 }); break; } catch { console.warn("[signal-lottery] notification_failed", { kind: "winner", attempt: attempt + 1 }); } }
+  // In a private bot chat this is the announcement destination. It deliberately
+  // contains no account identifiers or payout information.
+  await ctx.reply(`Weekly SignalLottery draw: ${result.winners.length} winner${result.winners.length === 1 ? "" : "s"} selected. Winners have been contacted privately.`);
+}
 
 composer.on("message:text", async (ctx, next) => {
   const text = ctx.message.text.trim();
+  if (!ctx.session.step) return next();
   try {
-    if (ctx.session.step === "add-signal") { const parts = text.split(",").map((x) => x.trim()); const radius = Number(parts[1]); const window = Number(parts[2]); if (parts.length !== 3 || !parts[0] || !Number.isFinite(radius) || radius <= 0 || !Number.isFinite(window) || window <= 0) return ctx.reply("Use a frequency, a positive radius, and a positive window. Try the example above."); await addSignal(parts[0], radius, window); ctx.session.step = undefined; return ctx.reply("That signal is now monitored.", { reply_markup: ownerMenu }); }
-    if (ctx.session.step === "schedule-draw") { const [prize, when] = text.split("|").map((x) => x.trim()); const date = new Date(when); if (!prize || !when || Number.isNaN(date.getTime()) || date.getTime() <= now().getTime()) return ctx.reply("Send a future UTC date-time in the format shown above."); const draw = await createDraw(ctx.from.id, prize, date.toISOString()); ctx.session.step = undefined; return ctx.reply("Your draw is scheduled. Open Upcoming draws to see it.", { reply_markup: inlineKeyboard([[inlineButton("Open draws", "draws:upcoming")], [inlineButton("Run draw when due", `owner:run:${draw.id}`)]]) }); }
-    if (ctx.session.step === "payout") { const id = ctx.session.draft?.drawId; if (!id || !text) return ctx.reply("Send the transaction reference to finish this payout."); const draw = await markPaid(id, ctx.from.id, text); if (!draw) return ctx.reply("That payout can't be updated from this account."); ctx.session.step = undefined; ctx.session.draft = undefined; return ctx.reply("Payout recorded. Nice work closing the loop.", { reply_markup: ownerMenu }); }
+    if (!await operator(ctx)) return;
+    if (ctx.session.step === "add-signal") { const parts = text.split(",").map((x) => x.trim()); const radius = Number(parts[2]); const window = Number(parts[3]); if (parts.length !== 4 || !parts[0] || !parts[1] || !Number.isFinite(radius) || radius <= 0 || !Number.isFinite(window) || window <= 0) return ctx.reply("Use a name, frequency, positive radius, and positive window. Try the example above."); await addSignal(parts[0], parts[1], radius, window); ctx.session.step = undefined; return ctx.reply("That signal is now monitored.", { reply_markup: ownerMenu }); }
+    if (ctx.session.step === "schedule-draw") { const [prize, when, countText] = text.split("|").map((x) => x.trim()); const date = new Date(when); const count = countText ? Number(countText) : 3; if (!prize || !when || Number.isNaN(date.getTime()) || date.getTime() <= now().getTime() || !Number.isInteger(count) || count < 1 || count > 20) return ctx.reply("Send a future UTC date-time and 1–20 winners in the format shown above."); const draw = await createDraw(ctx.from.id, prize, date.toISOString(), count); ctx.session.step = undefined; return ctx.reply("Your draw is scheduled. Entries close at the draw time.", { reply_markup: inlineKeyboard([[inlineButton("Open draws", "draws:upcoming")], [inlineButton("Run when due", `owner:run:${draw.id}`)]]) }); }
+    if (ctx.session.step === "payout") { const [amount, currency, transaction] = text.split("|").map((x) => x.trim()); if (!amount || !currency) return ctx.reply("Send the amount and currency, with a transaction hash if you have one."); const payout = await recordPayout(ctx.session.draft?.drawId ?? "", ctx.from.id, amount, currency.toUpperCase(), transaction); if (!payout) return ctx.reply("Every winner already has a payout record for that draw."); console.info("[signal-lottery] payout_recorded", { status: payout.status }); ctx.session.step = undefined; ctx.session.draft = { payoutId: payout.id }; return ctx.reply("Payout recorded. Mark it complete after the transfer clears.", { reply_markup: inlineKeyboard([[inlineButton("Mark complete", `owner:complete:${payout.id}`)], [inlineButton("Owner controls", "owner:menu")]]) }); }
   } catch (error) { if (error instanceof StoreUnavailable) return unavailable(ctx); throw error; }
   return next();
 });
-
 export default composer;

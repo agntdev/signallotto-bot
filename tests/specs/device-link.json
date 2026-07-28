@@ -1,9 +1,9 @@
 [
   {
-    "name": "owner controls handle unavailable storage safely",
+    "name": "device linking handles unavailable storage safely",
     "steps": [
       {
-        "send": { "callback": "owner:menu" },
+        "send": { "callback": "device:menu" },
         "expect": [{ "method": "sendMessage", "payload": { "text": "SignalLottery isn't set up yet. Ask the owner to connect secure storage." } }]
       }
     ]

@@ -3,7 +3,7 @@
     "name": "a device report explains unavailable storage safely",
     "steps": [
       {
-        "send": { "text": "signal:harbor-88:device-01" },
+        "send": { "text": "signal:harbor-88:device-01:detection-0001" },
         "expect": [{ "method": "sendMessage", "payload": { "text": "SignalLottery isn't set up yet. Ask the owner to connect secure storage." } }]
       }
     ]

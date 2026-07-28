@@ -3,7 +3,7 @@ import type { Ctx } from "../bot.js";
 import { inlineButton, inlineKeyboard, registerMainMenuItem } from "../toolkit/index.js";
 import { devicesFor, linkDevice, StoreUnavailable } from "../lottery-store.js";
 
-registerMainMenuItem({ label: "Link device", data: "device:menu", order: 15 });
+registerMainMenuItem({ label: "Link a device", data: "device:menu", order: 15 });
 const composer = new Composer<Ctx>();
 const back = inlineKeyboard([[inlineButton("Back to menu", "menu:main")]]);
 

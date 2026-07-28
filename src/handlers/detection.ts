@@ -12,7 +12,13 @@ composer.hears(/^signal:([a-z0-9-]+):([a-zA-Z0-9_-]{3,48}):([a-zA-Z0-9_-]{6,96})
     if (reportedAt && Number.isNaN(reportedAt.getTime())) return ctx.reply("That detection time isn't valid. Send it as a UTC ISO time.");
     const outcome = await detect(ctx.match[1], ctx.match[2], ctx.match[3], reportedAt?.toISOString());
     console.info("[signal-lottery] detection_processed", { result: outcome.result });
-    const text = outcome.result === "issued" ? `Signal credit logged for ${outcome.signal.name}. One entry landed at ${outcome.detectedAt} UTC; you now have ${outcome.totalEntries} entries in this draw.`
+    const payoutLine = outcome.result === "issued" && outcome.payout === "pending" ? " A crypto payout is ready for operator settlement."
+      : outcome.result === "issued" && outcome.payout === "queued" ? " Your crypto payout is queued with your next batch."
+      : outcome.result === "issued" && outcome.payout === "wallet-required" ? " Link and verify a wallet to receive automatic crypto payouts."
+      : outcome.result === "issued" && outcome.payout === "kyc-required" ? " This payout needs KYC review before settlement."
+      : outcome.result === "issued" && outcome.payout === "daily-cap" ? " Today's payout limit is reached, so no crypto payout was added."
+      : "";
+    const text = outcome.result === "issued" ? `Signal credit logged for ${outcome.signal.name}. One entry landed at ${outcome.detectedAt} UTC; you now have ${outcome.totalEntries} entries in this draw.${payoutLine}`
       : outcome.result === "duplicate" ? "That signal was already credited recently. Your entry count is unchanged."
       : outcome.result === "paused" ? "Credits are paused. Resume them from the menu when you're ready."
       : outcome.result === "no-opt-in" ? "Location credits are off. Open /start and enable them before sending detections."

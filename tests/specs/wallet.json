@@ -1,0 +1,11 @@
+[
+  {
+    "name": "wallet management handles unavailable storage safely",
+    "steps": [
+      {
+        "send": { "callback": "wallet:menu" },
+        "expect": [{ "method": "sendMessage", "payload": { "text": "SignalLottery isn't set up yet. Ask the owner to connect secure storage." } }]
+      }
+    ]
+  }
+]

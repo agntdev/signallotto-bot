@@ -10,7 +10,7 @@ const composer = new Composer<Ctx>();
 
 const HELP =
   "SignalLottery turns verified nearby radio signals into draw entries.\n\n" +
-  "Start with /start, enable credits if you want them, then use the buttons to check entries and draws. Owners can manage signals and payouts from Owner controls.";
+  "Start with /start, opt in, and link your device. Then use the buttons to check entries, draws, and payouts. Owners can manage signals and payouts from Owner controls.";
 
 const backToMenu = inlineKeyboard([[inlineButton("⬅️ Back to menu", "menu:main")]]);
 

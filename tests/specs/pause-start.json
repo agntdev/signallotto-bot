@@ -7,7 +7,7 @@
           {
             "method": "sendMessage",
             "payload": {
-              "text": "Temporarily disable automatic ticket allocation"
+              "text": "SignalLottery isn't set up yet. Ask the owner to connect secure storage."
             }
           }
         ],

@@ -1,0 +1,20 @@
+[
+  {
+    "name": "owner controls opens from the menu",
+    "steps": [
+      {
+        "send": { "callback": "owner:menu" },
+        "expect": [{ "method": "editMessageText", "payload": { "text": "Owner controls are tied to the account that creates each draw." } }]
+      }
+    ]
+  },
+  {
+    "name": "payout command directs the owner to the safe payout flow",
+    "steps": [
+      {
+        "send": { "text": "/payout" },
+        "expect": [{ "method": "sendMessage", "payload": { "text": "Open Owner controls, then tap Settle payout to record a completed transfer." } }]
+      }
+    ]
+  }
+]
